@@ -27,12 +27,10 @@
 - [ ] Implement message queueing for offline delivery.  
 
 ## 6. Security Measures & Attack Prevention  
-- [ ] Implement post-quantum cryptographic methods for fallback security.  
 - [ ] Detect and prevent MITM attacks on classical communication channels.  
 - [ ] Secure API endpoints and network communication using TLS 1.3.  
 
 ## 7. Testing & Validation  
-- [ ] Perform unit tests for quantum key exchange and encryption.  
 - [ ] Test system resilience against quantum and classical attacks.  
 - [ ] Simulate an eavesdropper attack to validate QKD security.  
 
@@ -43,5 +41,4 @@
 
 ## 9. Future Enhancements & Optimizations  
 - [ ] Optimize quantum key generation speed.  
-- [ ] Improve UI/UX for better user experience.  
 - [ ] Extend the system for group chats and multi-user quantum-secure communication.  
