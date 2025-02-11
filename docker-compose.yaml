@@ -1,0 +1,38 @@
+services:
+  bob:
+    build: .
+    container_name: alice
+    command: ["sleep", "infinity"]
+    networks:
+      network:
+        ipv4_address: 10.0.0.2
+        mac_address: "02:42:0a:00:00:10"
+
+  alice:
+    build: .
+    container_name: bob
+    command: ["sleep", "infinity"]
+    networks:
+      network:
+        ipv4_address: 10.0.0.3
+        mac_address: "02:42:0a:00:00:11"
+
+  eve:
+    build: .
+    container_name: eve
+    command: ["sleep", "infinity"]
+    networks:
+      network:
+        ipv4_address: 10.0.0.4
+        mac_address: "02:42:0a:00:00:12"
+    volumes:
+      - ./exploit.py:/exploit.py
+    privileged: true
+  
+networks:
+  network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+          gateway: 10.0.0.1
