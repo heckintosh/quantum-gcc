@@ -2,8 +2,6 @@
 
 ## 1. Project Planning & Requirements Gathering  
 - [ ] Research quantum cryptographic protocols (e.g., BB84, E91, Quantum Key Distribution - QKD).  
-- [ ] Identify necessary hardware/software requirements for quantum key generation.  
-- [ ] Choose programming languages and frameworks for the chat application (e.g., Python, Java, Kotlin, C++).  
 
 ## 2. Quantum Key Distribution (QKD) Implementation  
 - [ ] Implement a Quantum Key Distribution (QKD) protocol (e.g., BB84).  
