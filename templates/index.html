@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Simple Group Chat</title>
+</head>
+<body>
+  <h1>Flask-SocketIO Group Chat</h1>
+  
+  <!-- Chat display area -->
+  <ul id="messages"></ul>
+  
+  <!-- Input for new messages -->
+  <input id="myMessage" autocomplete="off" placeholder="Type your message here..." />
+  <button id="sendMessage">Send</button>
+  
+  <!-- Import Socket.IO JavaScript library (CDN) -->
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  
+  <script>
+    // Connect to the server
+    var socket = io();
+    
+    // Elements
+    var messagesList = document.getElementById('messages');
+    var messageInput = document.getElementById('myMessage');
+    var sendButton = document.getElementById('sendMessage');
+    
+    // Send a message to the server when the "Send" button is clicked
+    sendButton.onclick = function() {
+      var msg = messageInput.value.trim();
+      if (msg) {
+        socket.send(msg);
+        messageInput.value = '';
+      }
+    };
+    
+    // Listen for incoming messages from the server
+    socket.on('message', function(msg) {
+      var li = document.createElement('li');
+      li.textContent = msg;
+      messagesList.appendChild(li);
+      // Optionally scroll down to the latest message
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+  </script>
+</body>
+</html>
