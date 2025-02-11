@@ -1,7 +1,6 @@
 # Quantum Secure Chat Application - Task List  
 
 ## 1. Project Planning & Requirements Gathering  
-- [ ] Define project scope, objectives, and expected outcomes.  
 - [ ] Research quantum cryptographic protocols (e.g., BB84, E91, Quantum Key Distribution - QKD).  
 - [ ] Identify necessary hardware/software requirements for quantum key generation.  
 - [ ] Choose programming languages and frameworks for the chat application (e.g., Python, Java, Kotlin, C++).  
@@ -26,7 +25,6 @@
 - [ ] Build a basic UI for Alice and Bob to communicate.  
 - [ ] Integrate messaging protocol (WebSocket, MQTT, or HTTP-based).  
 - [ ] Implement message queueing for offline delivery.  
-- [ ] Add features like timestamps, read receipts, and notifications.  
 
 ## 6. Security Measures & Attack Prevention  
 - [ ] Implement post-quantum cryptographic methods for fallback security.  
