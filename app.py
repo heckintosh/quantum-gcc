@@ -1,22 +1,46 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, send
 
 app = Flask(__name__)
-# You should use a secret key for production
-app.config['SECRET_KEY'] = 'secret!'
+# For production, replace 'secretkey' with a secure, random value
+app.config['SECRET_KEY'] = 'secretkey'
 socketio = SocketIO(app)
 
-@app.route('/')
+@app.route('/', methods=['GET', 'POST'])
 def index():
+    """Landing page where users enter a username."""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        if username:
+            session['username'] = username
+            return redirect(url_for('chat'))
     return render_template('index.html')
 
-@socketio.on('message')
-def handle_message(msg):
-    """Receive message from a client and broadcast to all."""
-    print('Received message: ' + str(msg))
-    # Broadcast the message to all connected clients
-    send(msg, broadcast=True)
+@app.route('/chat')
+def chat():
+    """Chat page - requires a username from the session."""
+    if 'username' not in session:
+        return redirect(url_for('index'))
+    return render_template('chat.html', username=session['username'])
+
+@socketio.on('chat_message')
+def handle_chat_message(data):
+    """
+    Expects data in the form:
+    {
+      'username': 'UserName',
+      'message': 'Hello World!'
+    }
+    This is then broadcast to all connected clients.
+    """
+    username = data.get('username')
+    message = data.get('message')
+    print(f"{username} says: {message}")
+
+    # Broadcast the message to all clients (including the sender)
+    # 'send' by default uses the 'message' event, but let's keep it explicit.
+    send(data, broadcast=True)
 
 if __name__ == '__main__':
-    # debug=True automatically reloads on code changes
-    socketio.run(app, host='0.0.0.0', port=8000, debug=True)
+    # You can also choose a port, e.g. port=8000
+    socketio.run(app, host='0.0.0.0', port=12345, debug=True)
