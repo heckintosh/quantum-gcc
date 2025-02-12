@@ -12,9 +12,9 @@
   <p>Select a chat partner to start a private conversation:</p>
   <form action="{{ url_for('set_target') }}" method="POST">
     <ul id="activeUserList" class="list-group mb-3">
-      <!-- Active users will be populated here by Socket.IO -->
+      <!-- Active users will be populated here -->
     </ul>
-    <!-- Hidden input to hold the selected target -->
+    <!-- Hidden input to store the selected partner -->
     <input type="hidden" id="selectedTarget" name="target" value="">
   </form>
 </div>
@@ -33,18 +33,33 @@
   socket.on('active_users', function(users) {
     activeUserList.innerHTML = '';
     users.forEach(function(user) {
-      if (user === username) return; // Exclude self
+      if (user === username) return; // exclude self
       const li = document.createElement('li');
       li.textContent = user;
+      li.dataset.username = user; // store username in data attribute
       li.className = 'list-group-item list-group-item-action';
       li.style.cursor = 'pointer';
       li.addEventListener('click', function() {
         selectedTargetInput.value = user;
-        // Submit the form when a user is selected.
         li.parentElement.parentElement.submit();
       });
       activeUserList.appendChild(li);
     });
+  });
+
+  // When a chat request is received, add a tick next to the requesting user's name.
+  socket.on('chat_request', function(data) {
+    const liElements = activeUserList.getElementsByTagName('li');
+    for (let li of liElements) {
+         if (li.dataset.username === data.from) {
+             if (!li.querySelector('.tick-icon')) {
+                 const tick = document.createElement('span');
+                 tick.className = 'tick-icon ml-2';
+                 tick.textContent = '✓';
+                 li.appendChild(tick);
+             }
+         }
+    }
   });
 </script>
 </body>

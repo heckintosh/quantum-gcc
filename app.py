@@ -6,7 +6,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secretkey'
 socketio = SocketIO(app)
 
-MAX_USERNAME_LENGTH = 16  # define maximum username length
+MAX_USERNAME_LENGTH = 16  # maximum username length
 
 # Global dictionary mapping Socket.IO session IDs to usernames
 active_users = {}
@@ -14,8 +14,8 @@ active_users = {}
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """
-    Landing page where users enter a username.
-    After a valid username is submitted, redirect to the partner selection screen.
+    Landing page for username entry.
+    After a valid username is submitted, redirect to partner selection.
     """
     if request.method == 'POST':
         username = request.form.get('username')
@@ -25,8 +25,7 @@ def index():
                 return redirect(url_for('index'))
             else:
                 session['username'] = username
-                print(session['username'])
-                # Clear any previously set chat target
+                # Clear any previous target
                 session.pop('target', None)
                 return redirect(url_for('select'))
         else:
@@ -37,8 +36,7 @@ def index():
 @app.route('/select')
 def select():
     """
-    Screen for selecting a chat partner.
-    The active users (excluding yourself) are shown; you must select one to chat with.
+    Selection screen: display active users (excluding self) for private chat.
     """
     if 'username' not in session:
         return redirect(url_for('index'))
@@ -47,8 +45,7 @@ def select():
 @app.route('/set_target', methods=['POST'])
 def set_target():
     """
-    Receives the selected chat partner and stores it in the session.
-    Redirects to the chat interface.
+    Save the chosen partner in session and notify the target.
     """
     if 'username' not in session:
         return redirect(url_for('index'))
@@ -57,12 +54,21 @@ def set_target():
         flash("You must select a chat partner.")
         return redirect(url_for('select'))
     session['target'] = target
+
+    # Look up the target's Socket.IO session id and notify them.
+    target_sid = None
+    for sid, user in active_users.items():
+        if user == target:
+            target_sid = sid
+            break
+    if target_sid:
+        socketio.emit('chat_request', {'from': session['username']}, to=target_sid)
     return redirect(url_for('chat'))
 
 @app.route('/chat')
 def chat():
     """
-    Chat page. Displays a header indicating a private chat with the chosen user.
+    Chat page that shows a header with the private partner.
     """
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
@@ -89,18 +95,15 @@ def handle_disconnect():
 @socketio.on('private_message')
 def handle_private_message(data):
     """
-    Expected data: {
-      'target': 'target_username',
-      'message': '...'
-    }
-    Sends the message only to the target user and echoes it to the sender.
+    Expected data: { 'target': 'target_username', 'message': '...' }
+    Sends the message only to the target and echoes it to the sender.
     """
     target_username = data.get('target')
     message = data.get('message')
     sender_username = active_users.get(request.sid, 'Anonymous')
     timestamp = time.strftime('%I:%M %p')
 
-    # Find the target user's Socket.IO session ID.
+    # Find target's session ID.
     target_sid = None
     for sid, user in active_users.items():
         if user == target_username:
@@ -108,13 +111,11 @@ def handle_private_message(data):
             break
 
     if target_sid:
-        # Send the private message to the target client.
         emit('private_message', {
             'username': sender_username,
             'message': message,
             'timestamp': timestamp
         }, to=target_sid)
-        # Also echo the message to the sender.
         emit('private_message', {
             'username': sender_username,
             'message': message,
@@ -122,7 +123,6 @@ def handle_private_message(data):
             'to': target_username
         }, to=request.sid)
     else:
-        # Send an error back if the target is offline.
         emit('error_message', {'error': 'User not found or offline.'}, to=request.sid)
 
 if __name__ == '__main__':
