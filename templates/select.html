@@ -1,4 +1,3 @@
-<!-- select.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,78 +9,125 @@
 <div class="container mt-5">
   <h2>Welcome, {{ username }}!</h2>
   <p>Select a chat partner to start a private conversation:</p>
+
+  <!-- Active user list + form to choose partner -->
   <form action="{{ url_for('set_target') }}" method="POST">
     <ul id="activeUserList" class="list-group mb-3"></ul>
     <input type="hidden" id="selectedTarget" name="target" value="">
   </form>
 </div>
 
+<!-- A simple hidden panel for "incoming request" -->
+<div 
+  id="incomingRequestPanel" 
+  class="alert alert-info" 
+  style="display: none; position: fixed; bottom: 20px; right: 20px; width: 300px;"
+>
+  <strong id="requesterName"></strong> wants to chat!
+  <div class="mt-2">
+    <button id="btnAccept" class="btn btn-sm btn-primary">Accept</button>
+    <button id="btnDecline" class="btn btn-sm btn-secondary">Decline</button>
+  </div>
+</div>
+
 <!-- Socket.IO JavaScript -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
   const socket = io();
-  const activeUserList = document.getElementById('activeUserList');
-  const selectedTargetInput = document.getElementById('selectedTarget');
-  const username = "{{ username }}";
 
-  socket.on('connect', function() {
-    console.log('Connected to Socket.IO');
-  });
+  const activeUserList        = document.getElementById('activeUserList');
+  const selectedTargetInput   = document.getElementById('selectedTarget');
+  const username              = "{{ username }}";
 
-  // Show the active user list
+  // "Incoming Request" UI elements
+  const incomingRequestPanel  = document.getElementById('incomingRequestPanel');
+  const requesterNameElement  = document.getElementById('requesterName');
+  const btnAccept             = document.getElementById('btnAccept');
+  const btnDecline            = document.getElementById('btnDecline');
+
+  // Track if there's a current incoming request
+  let currentRequester = null;
+
+  // Populate the active user list
   socket.on('active_users', function(users) {
     activeUserList.innerHTML = '';
     users.forEach(function(user) {
       if (user === username) return; // exclude self
       const li = document.createElement('li');
       li.textContent = user;
-      li.dataset.username = user; 
+      li.dataset.username = user;
       li.className = 'list-group-item list-group-item-action';
       li.style.cursor = 'pointer';
       li.addEventListener('click', function() {
         selectedTargetInput.value = user;
-        li.parentElement.parentElement.submit(); // Submits the form to /set_target
+        // Submits the form to /set_target
+        li.parentElement.parentElement.submit();
       });
       activeUserList.appendChild(li);
     });
   });
 
-  // If someone requests to chat with me
+  // 1) Show "incoming request" panel (no confirm()) when B gets a request from A
   socket.on('chat_request', function(data) {
-    const requester = data.from;
-    console.log("Received chat request from", requester);
+    currentRequester = data.from;
+    // Add a "tick" next to the requester in the user list (optional)
+    markUserWithTick(currentRequester);
 
-    // Show a popup: accept or decline
-    const accept = confirm(`User "${requester}" wants to chat. Click "OK" to accept or "Cancel" to decline.`);
-    if (accept) {
-      // Accept: do a POST to /accept_request
-      fetch('/accept_request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ 'requester': requester })
-      })
-      .then(res => {
-        if (!res.redirected) return;
-        // If the server redirects us, follow it
-        window.location = res.url;
-      });
-    } else {
-      // Decline
-      fetch('/decline_request', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({ 'requester': requester })
-      }).then(() => {
-        // Optionally do something else
-      });
+    // Show our small panel instead of confirm()
+    requesterNameElement.textContent = currentRequester;
+    incomingRequestPanel.style.display = 'block';
+  });
+
+  // 2) If A cancels before B responds, hide the panel
+  socket.on('request_canceled', function(data) {
+    if (data.canceler === currentRequester) {
+      // The user who requested just canceled, so hide the incoming panel
+      hideIncomingRequestPanel();
     }
   });
 
-  // Mark requesters with a tick icon
-  socket.on('chat_request', function(data) {
+  // Accept the request
+  btnAccept.addEventListener('click', function() {
+    if (!currentRequester) return;
+    const formData = new URLSearchParams({ 'requester': currentRequester });
+    fetch('/accept_request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData
+    })
+    .then(res => {
+      if (res.redirected) {
+        window.location = res.url; // typically /chat
+      }
+    });
+    hideIncomingRequestPanel();
+  });
+
+  // Decline the request
+  btnDecline.addEventListener('click', function() {
+    if (!currentRequester) return;
+    const formData = new URLSearchParams({ 'requester': currentRequester });
+    fetch('/decline_request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: formData
+    }).then(() => {
+      // Optionally do something else
+    });
+    hideIncomingRequestPanel();
+  });
+
+  // Helper to hide the panel and reset
+  function hideIncomingRequestPanel() {
+    incomingRequestPanel.style.display = 'none';
+    currentRequester = null;
+  }
+
+  // Optional: Mark the user who requested with a "tick"
+  function markUserWithTick(requester) {
     const liElements = activeUserList.getElementsByTagName('li');
     for (let li of liElements) {
-      if (li.dataset.username === data.from) {
+      if (li.dataset.username === requester) {
         if (!li.querySelector('.tick-icon')) {
           const tick = document.createElement('span');
           tick.className = 'tick-icon ml-2';
@@ -90,15 +136,16 @@
         }
       }
     }
-  });
+  }
 
-  // If a request was accepted or declined, we might show some message to the user
+  // If we get a 'chat_accepted' or 'chat_declined', you can handle those too
   socket.on('chat_accepted', function(data) {
-    // alert(`Your chat request was accepted by ${data.accepter}.`);
+    // E.g., you might show a small notification, then redirect
+    console.log(`Your chat request was accepted by ${data.accepter}.`);
   });
 
   socket.on('chat_declined', function(data) {
-    // alert(`Your chat request was declined by ${data.decliner}.`);
+    console.log(`Your chat request was declined by ${data.decliner}.`);
   });
 </script>
 </body>
