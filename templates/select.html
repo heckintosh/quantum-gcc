@@ -1,9 +1,9 @@
+<!-- select.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <title>Select Chat Partner</title>
-  <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
 </head>
 <body>
@@ -11,14 +11,12 @@
   <h2>Welcome, {{ username }}!</h2>
   <p>Select a chat partner to start a private conversation:</p>
   <form action="{{ url_for('set_target') }}" method="POST">
-    <ul id="activeUserList" class="list-group mb-3">
-      <!-- Active users will be populated here -->
-    </ul>
-    <!-- Hidden input to store the selected partner -->
+    <ul id="activeUserList" class="list-group mb-3"></ul>
     <input type="hidden" id="selectedTarget" name="target" value="">
   </form>
 </div>
-<!-- Socket.IO JavaScript (CDN) -->
+
+<!-- Socket.IO JavaScript -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 <script>
   const socket = io();
@@ -30,36 +28,77 @@
     console.log('Connected to Socket.IO');
   });
 
+  // Show the active user list
   socket.on('active_users', function(users) {
     activeUserList.innerHTML = '';
     users.forEach(function(user) {
       if (user === username) return; // exclude self
       const li = document.createElement('li');
       li.textContent = user;
-      li.dataset.username = user; // store username in data attribute
+      li.dataset.username = user; 
       li.className = 'list-group-item list-group-item-action';
       li.style.cursor = 'pointer';
       li.addEventListener('click', function() {
         selectedTargetInput.value = user;
-        li.parentElement.parentElement.submit();
+        li.parentElement.parentElement.submit(); // Submits the form to /set_target
       });
       activeUserList.appendChild(li);
     });
   });
 
-  // When a chat request is received, add a tick next to the requesting user's name.
+  // If someone requests to chat with me
+  socket.on('chat_request', function(data) {
+    const requester = data.from;
+    console.log("Received chat request from", requester);
+
+    // Show a popup: accept or decline
+    const accept = confirm(`User "${requester}" wants to chat. Click "OK" to accept or "Cancel" to decline.`);
+    if (accept) {
+      // Accept: do a POST to /accept_request
+      fetch('/accept_request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ 'requester': requester })
+      })
+      .then(res => {
+        if (!res.redirected) return;
+        // If the server redirects us, follow it
+        window.location = res.url;
+      });
+    } else {
+      // Decline
+      fetch('/decline_request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({ 'requester': requester })
+      }).then(() => {
+        // Optionally do something else
+      });
+    }
+  });
+
+  // Mark requesters with a tick icon
   socket.on('chat_request', function(data) {
     const liElements = activeUserList.getElementsByTagName('li');
     for (let li of liElements) {
-         if (li.dataset.username === data.from) {
-             if (!li.querySelector('.tick-icon')) {
-                 const tick = document.createElement('span');
-                 tick.className = 'tick-icon ml-2';
-                 tick.textContent = '✓';
-                 li.appendChild(tick);
-             }
-         }
+      if (li.dataset.username === data.from) {
+        if (!li.querySelector('.tick-icon')) {
+          const tick = document.createElement('span');
+          tick.className = 'tick-icon ml-2';
+          tick.textContent = '✓';
+          li.appendChild(tick);
+        }
+      }
     }
+  });
+
+  // If a request was accepted or declined, we might show some message to the user
+  socket.on('chat_accepted', function(data) {
+    // alert(`Your chat request was accepted by ${data.accepter}.`);
+  });
+
+  socket.on('chat_declined', function(data) {
+    // alert(`Your chat request was declined by ${data.decliner}.`);
   });
 </script>
 </body>

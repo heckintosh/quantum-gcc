@@ -6,17 +6,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secretkey'
 socketio = SocketIO(app)
 
-MAX_USERNAME_LENGTH = 16  # maximum username length
+MAX_USERNAME_LENGTH = 16
 
 # Global dictionary mapping Socket.IO session IDs to usernames
 active_users = {}
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    """
-    Landing page for username entry.
-    After a valid username is submitted, redirect to partner selection.
-    """
     if request.method == 'POST':
         username = request.form.get('username')
         if username:
@@ -25,7 +21,6 @@ def index():
                 return redirect(url_for('index'))
             else:
                 session['username'] = username
-                # Clear any previous target
                 session.pop('target', None)
                 return redirect(url_for('select'))
         else:
@@ -35,9 +30,6 @@ def index():
 
 @app.route('/select')
 def select():
-    """
-    Selection screen: display active users (excluding self) for private chat.
-    """
     if 'username' not in session:
         return redirect(url_for('index'))
     return render_template('select.html', username=session['username'])
@@ -45,7 +37,10 @@ def select():
 @app.route('/set_target', methods=['POST'])
 def set_target():
     """
-    Save the chosen partner in session and notify the target.
+    A chooses B from the user list.
+    - Store B in session['target']
+    - Send a 'chat_request' socket event to B so B can accept/decline
+    - Redirect A to a "waiting" page instead of /chat
     """
     if 'username' not in session:
         return redirect(url_for('index'))
@@ -53,29 +48,119 @@ def set_target():
     if not target:
         flash("You must select a chat partner.")
         return redirect(url_for('select'))
+
     session['target'] = target
 
-    # Look up the target's Socket.IO session id and notify them.
+    # Find target's Socket.IO session ID
     target_sid = None
     for sid, user in active_users.items():
         if user == target:
             target_sid = sid
             break
+
+    # Notify B that A wants to chat
     if target_sid:
         socketio.emit('chat_request', {'from': session['username']}, to=target_sid)
+
+    # Instead of going directly to /chat, go to a "waiting" page
+    return redirect(url_for('waiting'))
+
+@app.route('/waiting')
+def waiting():
+    """
+    Show a waiting page to A while B decides to accept or decline.
+    """
+    if 'username' not in session or 'target' not in session:
+        return redirect(url_for('index'))
+    return render_template(
+        'waiting.html',
+        username=session['username'],
+        target=session['target']
+    )
+
+@app.route('/cancel_request', methods=['POST'])
+def cancel_request():
+    """
+    A calls this to cancel the outgoing request before it's accepted/declined.
+    - Tells B "request_canceled" so B won't bother accepting.
+    - Clears A's target and returns to select page.
+    """
+    if 'username' not in session or 'target' not in session:
+        return redirect(url_for('index'))
+
+    target = session['target']
+    username = session['username']
+
+    # Find target's sid
+    target_sid = None
+    for sid, user in active_users.items():
+        if user == target:
+            target_sid = sid
+            break
+
+    # Notify B that A canceled
+    if target_sid:
+        socketio.emit('request_canceled', {'canceler': username}, to=target_sid)
+
+    # Clear A's target
+    session.pop('target', None)
+    flash("Chat request canceled.")
+    return redirect(url_for('select'))
+
+@app.route('/accept_request', methods=['POST'])
+def accept_request():
+    if 'username' not in session:
+        return redirect(url_for('index'))
+
+    requester = request.form.get('requester')
+    if not requester:
+        flash("No requester provided.")
+        return redirect(url_for('select'))
+
+    # B sets session['target'] to A
+    session['target'] = requester
+
+    # Notify A that B accepted
+    requester_sid = None
+    for sid, user in active_users.items():
+        if user == requester:
+            requester_sid = sid
+            break
+    if requester_sid:
+        socketio.emit('chat_accepted', {'accepter': session['username']}, to=requester_sid)
+
     return redirect(url_for('chat'))
+
+@app.route('/decline_request', methods=['POST'])
+def decline_request():
+    if 'username' not in session:
+        return redirect(url_for('index'))
+
+    requester = request.form.get('requester')
+    if not requester:
+        flash("No requester provided.")
+        return redirect(url_for('select'))
+
+    # Notify A that B declined
+    requester_sid = None
+    for sid, user in active_users.items():
+        if user == requester:
+            requester_sid = sid
+            break
+    if requester_sid:
+        socketio.emit('chat_declined', {'decliner': session['username']}, to=requester_sid)
+
+    return redirect(url_for('select'))
 
 @app.route('/chat')
 def chat():
-    """
-    Chat page that shows a header with the private partner.
-    """
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
     return render_template('chat.html', username=session['username'], target=session['target'])
 
+# ----- SocketIO Events ----- #
+
 def update_active_users():
-    """Broadcast the list of active users to all connected clients."""
     users = list(active_users.values())
     socketio.emit('active_users', users)
 
@@ -94,16 +179,12 @@ def handle_disconnect():
 
 @socketio.on('private_message')
 def handle_private_message(data):
-    """
-    Expected data: { 'target': 'target_username', 'message': '...' }
-    Sends the message only to the target and echoes it to the sender.
-    """
     target_username = data.get('target')
     message = data.get('message')
     sender_username = active_users.get(request.sid, 'Anonymous')
     timestamp = time.strftime('%I:%M %p')
 
-    # Find target's session ID.
+    # Find target sid
     target_sid = None
     for sid, user in active_users.items():
         if user == target_username:
@@ -116,6 +197,7 @@ def handle_private_message(data):
             'message': message,
             'timestamp': timestamp
         }, to=target_sid)
+        # Echo to sender
         emit('private_message', {
             'username': sender_username,
             'message': message,
