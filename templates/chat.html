@@ -3,67 +3,140 @@
 <head>
   <meta charset="UTF-8" />
   <title>Group Chat</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <!-- Chat CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
 </head>
 <body>
-  <h1>Group Chat</h1>
-  
-  <div>
-    <strong>You are:</strong> {{ username }}
+<main class="content">
+  <div class="container p-0">
+    <h1 class="h3 mb-3">Messages</h1>
+
+    <div class="card">
+      <div class="row g-0">
+        <!-- Sidebar (optional) -->
+        <div class="col-12 col-lg-5 col-xl-3 border-right">
+          <div class="p-4">
+            <h4>Global Chat Room</h4>
+            <p class="text-muted mb-0">
+              Everyone who enters their username can chat here in real time.
+            </p>
+          </div>
+          <hr class="d-block d-lg-none mt-1 mb-0">
+        </div>
+        <!-- Main Chat Area -->
+        <div class="col-12 col-lg-7 col-xl-9">
+          <div class="py-2 px-4 border-bottom d-none d-lg-block">
+            <div class="d-flex align-items-center py-1">
+              <div class="position-relative">
+                <!-- Optional: Show the user's avatar or initial -->
+                <img 
+                  src="https://bootdey.com/img/Content/avatar/avatar1.png" 
+                  class="rounded-circle mr-1" 
+                  alt="Avatar" 
+                  width="40" 
+                  height="40"
+                >
+              </div>
+              <div class="flex-grow-1 pl-3">
+                <strong>You are:</strong> {{ username }}
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat Messages Container -->
+          <div class="position-relative">
+            <div class="chat-messages p-4" id="chatMessages">
+              <!-- Dynamic messages will appear here -->
+            </div>
+          </div>
+
+          <!-- Message Input -->
+          <div class="flex-grow-0 py-3 px-4 border-top">
+            <div class="input-group">
+              <input 
+                type="text" 
+                class="form-control" 
+                id="messageInput" 
+                placeholder="Type your message..."
+              >
+              <button class="btn btn-primary" id="sendButton">Send</button>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
   </div>
+</main>
 
-  <!-- Chat display area -->
-  <ul id="messages"></ul>
+<!-- Socket.IO JavaScript (CDN) -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
 
-  <!-- Input for new messages -->
-  <input id="myMessage" autocomplete="off" placeholder="Type your message here..." />
-  <button id="sendMessage">Send</button>
+<script>
+  // Connect to the server
+  const socket = io();
 
-  <!-- Socket.IO JavaScript library from CDN -->
-  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+  // The username is provided by Flask
+  const username = "{{ username }}";
 
-  <script>
-    // Connect to the default namespace
-    const socket = io();
+  // DOM elements
+  const chatMessages = document.getElementById('chatMessages');
+  const messageInput = document.getElementById('messageInput');
+  const sendButton   = document.getElementById('sendButton');
 
-    // The username is injected by Flask
-    const username = "{{ username }}";
+  // Send message to server
+  sendButton.onclick = function() {
+    const msg = messageInput.value.trim();
+    if (msg) {
+      socket.emit('chat_message', {
+        username: username,
+        message: msg
+      });
+      messageInput.value = '';
+    }
+  };
 
-    // DOM elements
-    const messagesList = document.getElementById('messages');
-    const messageInput = document.getElementById('myMessage');
-    const sendButton = document.getElementById('sendMessage');
+  // Press "Enter" to send message
+  messageInput.addEventListener('keyup', function(event) {
+    if (event.key === 'Enter') {
+      sendButton.click();
+    }
+  });
 
-    // Send a chat message to the server
-    sendButton.onclick = function() {
-      const msg = messageInput.value.trim();
-      if (msg) {
-        socket.emit('chat_message', {
-          username: username,
-          message: msg
-        });
-        messageInput.value = '';
-      }
-    };
+  // Listen for incoming messages (broadcast from server)
+  socket.on('message', function(data) {
+    // data should look like: { username: "...", message: "...", timestamp: "..." }
+    const item = document.createElement('div');
+    const isMe = (data.username === username);
 
-    // Listen for incoming messages (broadcast from server)
-    socket.on('message', function(data) {
-      // data is expected to be { username: '...', message: '...' }
-      const li = document.createElement('li');
-      
-      // Differentiate your own messages from others'
-      if (data.username === username) {
-        // Style the sender message
-        li.style.color = 'blue';
-        li.textContent = `You: ${data.message}`;
-      } else {
-        li.style.color = 'green';
-        li.textContent = `${data.username}: ${data.message}`;
-      }
-      
-      messagesList.appendChild(li);
-      // Optionally scroll to the bottom
-      window.scrollTo(0, document.body.scrollHeight);
-    });
-  </script>
+    // Decide left or right alignment
+    item.classList.add(isMe ? 'chat-message-right' : 'chat-message-left', 'pb-4');
+
+    // Build the HTML content
+    // We mimic the structure from the template:
+    item.innerHTML = `
+      <div>
+        <img
+          src="https://bootdey.com/img/Content/avatar/${isMe ? 'avatar1.png' : 'avatar3.png'}"
+          class="rounded-circle mr-1"
+          alt="Avatar"
+          width="40"
+          height="40"
+        >
+        <div class="text-muted small text-nowrap mt-2">${data.timestamp || ''}</div>
+      </div>
+      <div class="flex-shrink-1 bg-light rounded py-2 px-3 ${isMe ? 'mr-3' : 'ml-3'}">
+        <div class="font-weight-bold mb-1">${isMe ? 'You' : data.username}</div>
+        ${data.message}
+      </div>
+    `;
+
+    chatMessages.appendChild(item);
+    // Auto-scroll to bottom
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
+</script>
 </body>
 </html>

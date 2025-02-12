@@ -1,14 +1,43 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Enter Username</title>
+  <meta charset="utf-8" />
+  <title>Group Chat - Enter Username</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    body {
+      margin-top: 50px;
+      background-color: #f8f9fa;
+    }
+    .centered-form {
+      max-width: 400px;
+      margin: 0 auto;
+    }
+  </style>
 </head>
 <body>
-  <h1>Welcome to Our Group Chat</h1>
-  <form action="/" method="POST">
-    <input type="text" name="username" placeholder="Enter username" required>
-    <button type="submit">Join Chat</button>
-  </form>
+<div class="container centered-form">
+  <div class="card shadow">
+    <div class="card-body">
+      <h2 class="card-title text-center mb-4">Welcome to Our Group Chat</h2>
+      <p class="text-center text-muted">Please enter a username to join the chat.</p>
+      <form action="/" method="POST">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input 
+            type="text" 
+            name="username" 
+            id="username" 
+            class="form-control" 
+            placeholder="e.g., JohnDoe" 
+            required
+          >
+        </div>
+        <button type="submit" class="btn btn-primary btn-block mt-3">Join Chat</button>
+      </form>
+    </div>
+  </div>
+</div>
 </body>
 </html>
