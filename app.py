@@ -8,8 +8,8 @@ socketio = SocketIO(app)
 
 MAX_USERNAME_LENGTH = 16
 
-# Global dictionary mapping Socket.IO session IDs to usernames
-active_users = {}
+active_users = {}     # sid -> username
+ongoing_chats = {}    # username -> partner_username  (both directions)
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -36,12 +36,6 @@ def select():
 
 @app.route('/set_target', methods=['POST'])
 def set_target():
-    """
-    A chooses B from the user list.
-    - Store B in session['target']
-    - Send a 'chat_request' socket event to B so B can accept/decline
-    - Redirect A to a "waiting" page instead of /chat
-    """
     if 'username' not in session:
         return redirect(url_for('index'))
     target = request.form.get('target')
@@ -51,58 +45,42 @@ def set_target():
 
     session['target'] = target
 
-    # Find target's Socket.IO session ID
     target_sid = None
     for sid, user in active_users.items():
         if user == target:
             target_sid = sid
             break
 
-    # Notify B that A wants to chat
     if target_sid:
         socketio.emit('chat_request', {'from': session['username']}, to=target_sid)
 
-    # Instead of going directly to /chat, go to a "waiting" page
     return redirect(url_for('waiting'))
 
 @app.route('/waiting')
 def waiting():
-    """
-    Show a waiting page to A while B decides to accept or decline.
-    """
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
-    return render_template(
-        'waiting.html',
-        username=session['username'],
-        target=session['target']
-    )
+    return render_template('waiting.html', 
+                           username=session['username'],
+                           target=session['target'])
 
 @app.route('/cancel_request', methods=['POST'])
 def cancel_request():
-    """
-    A calls this to cancel the outgoing request before it's accepted/declined.
-    - Tells B "request_canceled" so B won't bother accepting.
-    - Clears A's target and returns to select page.
-    """
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
 
     target = session['target']
     username = session['username']
 
-    # Find target's sid
     target_sid = None
     for sid, user in active_users.items():
         if user == target:
             target_sid = sid
             break
 
-    # Notify B that A canceled
     if target_sid:
         socketio.emit('request_canceled', {'canceler': username}, to=target_sid)
 
-    # Clear A's target
     session.pop('target', None)
     flash("Chat request canceled.")
     return redirect(url_for('select'))
@@ -117,8 +95,13 @@ def accept_request():
         flash("No requester provided.")
         return redirect(url_for('select'))
 
-    # B sets session['target'] to A
     session['target'] = requester
+
+    # -- NEW: Mark them in ongoing_chats so the server knows they're in a chat
+    b_username = session['username']
+    ongoing_chats[b_username] = requester
+    ongoing_chats[requester] = b_username
+    # For example, ongoing_chats['Alice']='Bob' and ongoing_chats['Bob']='Alice'
 
     # Notify A that B accepted
     requester_sid = None
@@ -141,7 +124,6 @@ def decline_request():
         flash("No requester provided.")
         return redirect(url_for('select'))
 
-    # Notify A that B declined
     requester_sid = None
     for sid, user in active_users.items():
         if user == requester:
@@ -156,9 +138,9 @@ def decline_request():
 def chat():
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
-    return render_template('chat.html', username=session['username'], target=session['target'])
-
-# ----- SocketIO Events ----- #
+    return render_template('chat.html', 
+                           username=session['username'], 
+                           target=session['target'])
 
 def update_active_users():
     users = list(active_users.values())
@@ -173,9 +155,72 @@ def handle_connect():
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    if request.sid in active_users:
-        del active_users[request.sid]
+    """
+    If a user in a 1-on-1 chat disconnects,
+    notify their partner with 'chat_ended' so the partner is "kicked" out.
+    """
+    sid = request.sid
+    if sid in active_users:
+        leaver = active_users[sid]
+        del active_users[sid]
         update_active_users()
+
+        # Check if 'leaver' is in an ongoing chat
+        if leaver in ongoing_chats:
+            partner = ongoing_chats[leaver]
+            # Remove both from the dict
+            del ongoing_chats[leaver]
+            if partner in ongoing_chats:
+                del ongoing_chats[partner]
+
+            # Find partner's sid
+            partner_sid = None
+            for s_id, user in active_users.items():
+                if user == partner:
+                    partner_sid = s_id
+                    break
+
+            # Notify partner that the chat ended
+            if partner_sid:
+                socketio.emit('chat_ended', {'leaver': leaver}, to=partner_sid)
+
+@app.route('/leave_chat', methods=['POST'])
+def leave_chat():
+    """
+    User explicitly leaves the current chat,
+    so we kick the other user (send chat_ended).
+    Then redirect this user to /select.
+    """
+    if 'username' not in session:
+        return redirect(url_for('index'))
+
+    leaver = session['username']
+    partner = session.get('target')
+
+    # Remove from any ongoing chat dictionary
+    if partner:
+        # server code that finds and removes this pair from ongoing_chats...
+        # Example:
+        if leaver in ongoing_chats:
+            del ongoing_chats[leaver]
+        if partner in ongoing_chats:
+            del ongoing_chats[partner]
+
+        # Find partner's Socket.IO session ID
+        partner_sid = None
+        for sid, user in active_users.items():
+            if user == partner:
+                partner_sid = sid
+                break
+
+        # Emit 'chat_ended' to partner
+        if partner_sid:
+            socketio.emit('chat_ended', {'leaver': leaver}, to=partner_sid)
+
+    # Clear your target
+    session.pop('target', None)
+
+    return redirect(url_for('select'))
 
 @socketio.on('private_message')
 def handle_private_message(data):
@@ -184,7 +229,6 @@ def handle_private_message(data):
     sender_username = active_users.get(request.sid, 'Anonymous')
     timestamp = time.strftime('%I:%M %p')
 
-    # Find target sid
     target_sid = None
     for sid, user in active_users.items():
         if user == target_username:

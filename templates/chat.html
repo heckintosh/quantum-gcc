@@ -13,7 +13,9 @@
   <div class="container p-0">
     <div class="py-2 px-4 border-bottom">
       <h4>Chatting privately with {{ target }}</h4>
-      <a href="{{ url_for('select') }}" class="btn btn-sm btn-secondary">Change Chat Partner</a>
+      <form action="{{ url_for('leave_chat') }}" method="POST" style="display:inline;">
+        <button type="submit" class="btn btn-sm btn-secondary">Change Chat Partner</button>
+      </form>
     </div>
     <h1 class="h3 mb-3">Messages</h1>
     <div class="card">
@@ -137,6 +139,13 @@
              }
          }
     }
+  });
+
+  socket.on('chat_ended', function(data) {
+    // data = { leaver: "Alice" }
+    alert(`${data.leaver} has left the chat. You will be returned to the selection page.`);
+    // Redirect or reload
+    window.location.href = "/select";
   });
 
   socket.on('error_message', function(data) {
