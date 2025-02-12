@@ -6,7 +6,7 @@ services:
     networks:
       network:
         ipv4_address: 10.0.0.2
-        mac_address: "02:42:0a:00:00:10"
+        mac_address: "20:20:20:20:20:20"
 
   alice:
     build: .
@@ -15,7 +15,7 @@ services:
     networks:
       network:
         ipv4_address: 10.0.0.3
-        mac_address: "02:42:0a:00:00:11"
+        mac_address: "30:30:30:30:30:30"
 
   eve:
     build: .
@@ -24,7 +24,7 @@ services:
     networks:
       network:
         ipv4_address: 10.0.0.4
-        mac_address: "02:42:0a:00:00:12"
+        mac_address: "40:40:40:40:40:40"
     volumes:
       - ./exploit.py:/exploit.py
     privileged: true
