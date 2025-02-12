@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Group Chat</title>
+  <title>Private Chat</title>
   <!-- Bootstrap CSS -->
   <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
   <!-- Chat CSS -->
@@ -11,16 +11,20 @@
 <body>
 <main class="content">
   <div class="container p-0">
+    <div class="py-2 px-4 border-bottom">
+      <h4>Chatting privately with {{ target }}</h4>
+      <a href="{{ url_for('select') }}" class="btn btn-sm btn-secondary">Change Chat Partner</a>
+    </div>
     <h1 class="h3 mb-3">Messages</h1>
-
     <div class="card">
       <div class="row g-0">
-        <!-- Sidebar (optional) -->
+        <!-- Sidebar: Active Users List (optional) -->
         <div class="col-12 col-lg-5 col-xl-3 border-right">
           <div class="p-4">
-            <h4>Global Chat Room</h4>
+            <h4>Active Users</h4>
+            <ul id="activeUserList" class="list-unstyled"></ul>
             <p class="text-muted mb-0">
-              Everyone who enters their username can chat here in real time.
+              Only private chats are available.
             </p>
           </div>
           <hr class="d-block d-lg-none mt-1 mb-0">
@@ -30,7 +34,6 @@
           <div class="py-2 px-4 border-bottom d-none d-lg-block">
             <div class="d-flex align-items-center py-1">
               <div class="position-relative">
-                <!-- Optional: Show the user's avatar or initial -->
                 <img 
                   src="https://bootdey.com/img/Content/avatar/avatar1.png" 
                   class="rounded-circle mr-1" 
@@ -44,15 +47,9 @@
               </div>
             </div>
           </div>
-
-          <!-- Chat Messages Container -->
           <div class="position-relative">
-            <div class="chat-messages p-4" id="chatMessages">
-              <!-- Dynamic messages will appear here -->
-            </div>
+            <div class="chat-messages p-4" id="chatMessages"></div>
           </div>
-
-          <!-- Message Input -->
           <div class="flex-grow-0 py-3 px-4 border-top">
             <div class="input-group">
               <input 
@@ -64,78 +61,71 @@
               <button class="btn btn-primary" id="sendButton">Send</button>
             </div>
           </div>
-
         </div>
       </div>
     </div>
   </div>
 </main>
-
 <!-- Socket.IO JavaScript (CDN) -->
 <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
-
 <script>
-  // Connect to the server
   const socket = io();
-
-  // The username is provided by Flask
   const username = "{{ username }}";
-
-  // DOM elements
+  const target = "{{ target }}"; // Should be a non-empty string
   const chatMessages = document.getElementById('chatMessages');
   const messageInput = document.getElementById('messageInput');
-  const sendButton   = document.getElementById('sendButton');
+  const sendButton = document.getElementById('sendButton');
+  const activeUserList = document.getElementById('activeUserList');
 
-  // Send message to server
+  // Send message (only private messages are supported)
   sendButton.onclick = function() {
     const msg = messageInput.value.trim();
     if (msg) {
-      socket.emit('chat_message', {
-        username: username,
-        message: msg
-      });
+      socket.emit('private_message', { target: target, message: msg });
       messageInput.value = '';
     }
   };
 
-  // Press "Enter" to send message
   messageInput.addEventListener('keyup', function(event) {
     if (event.key === 'Enter') {
       sendButton.click();
     }
   });
 
-  // Listen for incoming messages (broadcast from server)
-  socket.on('message', function(data) {
-    // data should look like: { username: "...", message: "...", timestamp: "..." }
+  // Listen for incoming private messages.
+  socket.on('private_message', function(data) {
     const item = document.createElement('div');
     const isMe = (data.username === username);
-
-    // Decide left or right alignment
-    item.classList.add(isMe ? 'chat-message-right' : 'chat-message-left', 'pb-4');
-
-    // Build the HTML content
-    // We mimic the structure from the template:
     item.innerHTML = `
-      <div>
-        <img
-          src="https://bootdey.com/img/Content/avatar/${isMe ? 'avatar1.png' : 'avatar3.png'}"
-          class="rounded-circle mr-1"
-          alt="Avatar"
-          width="40"
-          height="40"
-        >
-        <div class="text-muted small text-nowrap mt-2">${data.timestamp || ''}</div>
-      </div>
-      <div class="flex-shrink-1 bg-light rounded py-2 px-3 ${isMe ? 'mr-3' : 'ml-3'}">
-        <div class="font-weight-bold mb-1">${isMe ? 'You' : data.username}</div>
-        ${data.message}
+      <div style="background-color: #ffe; padding: 5px; border-radius: 5px; margin: 5px 0;">
+        <strong>${isMe ? 'You (private)' : data.username + ' (private)'}:</strong> ${data.message}
+        <span style="font-size: small; color: gray;">${data.timestamp}</span>
       </div>
     `;
-
     chatMessages.appendChild(item);
-    // Auto-scroll to bottom
     chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
+
+  // Listen for active user updates.
+  socket.on('active_users', function(users) {
+    activeUserList.innerHTML = '';
+    users.forEach(function(user) {
+      if (user === username) return;
+      const li = document.createElement('li');
+      li.textContent = user;
+      li.className = 'list-group-item';
+      li.style.cursor = 'pointer';
+      li.style.padding = '5px 0';
+      li.addEventListener('click', function() {
+        alert('To change your chat partner, please click "Change Chat Partner" at the top.');
+      });
+      activeUserList.appendChild(li);
+    });
+  });
+
+  // Listen for error messages.
+  socket.on('error_message', function(data) {
+    alert(data.error);
   });
 </script>
 </body>

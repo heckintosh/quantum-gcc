@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Select Chat Partner</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+  <h2>Welcome, {{ username }}!</h2>
+  <p>Select a chat partner to start a private conversation:</p>
+  <form action="{{ url_for('set_target') }}" method="POST">
+    <ul id="activeUserList" class="list-group mb-3">
+      <!-- Active users will be populated here by Socket.IO -->
+    </ul>
+    <!-- Hidden input to hold the selected target -->
+    <input type="hidden" id="selectedTarget" name="target" value="">
+  </form>
+</div>
+<!-- Socket.IO JavaScript (CDN) -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+  const socket = io();
+  const activeUserList = document.getElementById('activeUserList');
+  const selectedTargetInput = document.getElementById('selectedTarget');
+  const username = "{{ username }}";
+
+  socket.on('connect', function() {
+    console.log('Connected to Socket.IO');
+  });
+
+  socket.on('active_users', function(users) {
+    activeUserList.innerHTML = '';
+    users.forEach(function(user) {
+      if (user === username) return; // Exclude self
+      const li = document.createElement('li');
+      li.textContent = user;
+      li.className = 'list-group-item list-group-item-action';
+      li.style.cursor = 'pointer';
+      li.addEventListener('click', function() {
+        selectedTargetInput.value = user;
+        // Submit the form when a user is selected.
+        li.parentElement.parentElement.submit();
+      });
+      activeUserList.appendChild(li);
+    });
+  });
+</script>
+</body>
+</html>
