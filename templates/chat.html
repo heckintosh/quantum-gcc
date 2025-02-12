@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Group Chat</title>
+</head>
+<body>
+  <h1>Group Chat</h1>
+  
+  <div>
+    <strong>You are:</strong> {{ username }}
+  </div>
+
+  <!-- Chat display area -->
+  <ul id="messages"></ul>
+
+  <!-- Input for new messages -->
+  <input id="myMessage" autocomplete="off" placeholder="Type your message here..." />
+  <button id="sendMessage">Send</button>
+
+  <!-- Socket.IO JavaScript library from CDN -->
+  <script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+
+  <script>
+    // Connect to the default namespace
+    const socket = io();
+
+    // The username is injected by Flask
+    const username = "{{ username }}";
+
+    // DOM elements
+    const messagesList = document.getElementById('messages');
+    const messageInput = document.getElementById('myMessage');
+    const sendButton = document.getElementById('sendMessage');
+
+    // Send a chat message to the server
+    sendButton.onclick = function() {
+      const msg = messageInput.value.trim();
+      if (msg) {
+        socket.emit('chat_message', {
+          username: username,
+          message: msg
+        });
+        messageInput.value = '';
+      }
+    };
+
+    // Listen for incoming messages (broadcast from server)
+    socket.on('message', function(data) {
+      // data is expected to be { username: '...', message: '...' }
+      const li = document.createElement('li');
+      
+      // Differentiate your own messages from others'
+      if (data.username === username) {
+        // Style the sender message
+        li.style.color = 'blue';
+        li.textContent = `You: ${data.message}`;
+      } else {
+        li.style.color = 'green';
+        li.textContent = `${data.username}: ${data.message}`;
+      }
+      
+      messagesList.appendChild(li);
+      // Optionally scroll to the bottom
+      window.scrollTo(0, document.body.scrollHeight);
+    });
+  </script>
+</body>
+</html>
