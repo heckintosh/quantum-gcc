@@ -33,8 +33,8 @@
     const messageInput = document.getElementById('myMessage');
     const sendButton = document.getElementById('sendMessage');
 
-    // Send a chat message to the server
-    sendButton.onclick = function() {
+    // A helper function for sending a chat message
+    function sendChatMessage() {
       const msg = messageInput.value.trim();
       if (msg) {
         socket.emit('chat_message', {
@@ -43,7 +43,19 @@
         });
         messageInput.value = '';
       }
+    }
+
+    // Send a chat message on button click
+    sendButton.onclick = function() {
+      sendChatMessage();
     };
+
+    // ALSO send the message when Enter is pressed inside the input box
+    messageInput.addEventListener('keyup', function(event) {
+      if (event.key === 'Enter') {
+        sendChatMessage();
+      }
+    });
 
     // Listen for incoming messages (broadcast from server)
     socket.on('message', function(data) {
