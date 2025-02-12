@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, flash
 from flask_socketio import SocketIO, send
 import time
 
@@ -7,16 +7,27 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secretkey'
 socketio = SocketIO(app)
 
+MAX_USERNAME_LENGTH = 16  # define your desired max length here
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     """
     Landing page where users enter a username.
     """
     if request.method == 'POST':
-        username = request.form.get('username')
+        username = request.form.get('username')  # get form data
         if username:
-            session['username'] = username
-            return redirect(url_for('chat'))
+            # Check length
+            if len(username) > MAX_USERNAME_LENGTH:
+                flash(f"Username must be at most {MAX_USERNAME_LENGTH} characters long.")
+                return redirect(url_for('index'))
+            else:
+                # if okay, proceed
+                session['username'] = username
+                return redirect(url_for('chat'))
+        else:
+            flash("Username cannot be empty.")
+            return redirect(url_for('index'))
     return render_template('index.html')
 
 @app.route('/chat')
