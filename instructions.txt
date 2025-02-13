@@ -1,11 +1,8 @@
-docker exec -it bb8e sh
-python3 server.py
+docker exec -it bb8e /bin/sh
+python3 server.py --intercept
 
-docker exec -it chat sh
+docker exec -it chat /bin/sh
 python3 app.py
 
-docker exec -it eve sh
-python3 exploit.py 10.0.0.2 10.0.0.5
-
-docker exec -it bob sh
+docker exec -it bob /bin/sh
 python3 client.py bob 10.0.0.2 http://10.0.0.3:12345/
