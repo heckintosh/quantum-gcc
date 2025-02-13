@@ -3,6 +3,4 @@ FROM ubuntu:latest
 WORKDIR /work
 
 RUN apt-get update && \
-    apt-get install -y iputils-ping net-tools python3 python3-pip
-
-RUN pip install websockets scapy --break-system-packages
+    apt-get install -y iputils-ping net-tools python3 python3-scapy

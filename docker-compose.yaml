@@ -53,6 +53,7 @@ services:
         mac_address: "60:60:60:60:60:60"
     volumes:
       - ./attacker:/work
+    privileged: true
 
 networks:
   network:
