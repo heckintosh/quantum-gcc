@@ -11,11 +11,41 @@ MAX_USERNAME_LENGTH = 16
 active_users = {}     # sid -> username
 ongoing_chats = {}    # username -> partner_username  (both directions)
 
+# --------------- NEW: Track which users have "quantkeys" ---------------
+quant_keys = {}  # e.g. quant_keys["alice"] = "qk_value_for_alice"
+
+# ------------------ Admin Route to Set a Quantum Key -------------------
+@app.route('/update', methods=['POST'])
+def update_quantkey():
+    """
+    This route expects:
+      - A request header: 'Authorization: qkadmin'
+      - form data: 'username' and 'quantkey'
+    If valid, store quantkey in quant_keys[username].
+    """
+    if request.headers.get('Authorization') != 'qkadmin':
+        return "Unauthorized", 401
+
+    username = request.form.get('username')
+    qk = request.form.get('quantkey')
+    if not username or not qk:
+        return "Missing username or quantkey", 400
+
+    # Assign the quantkey to this user
+    quant_keys[username] = qk
+    return f"Assigned quantkey to user '{username}'", 200
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
         username = request.form.get('username')
         if username:
+            # -------------- NEW: Check if this username is in quant_keys --------------
+            if username not in quant_keys:
+                flash("No quantkey assigned for your username. Contact admin.")
+                return redirect(url_for('index'))
+            # -------------------------------------------------------------------------
+
             if len(username) > MAX_USERNAME_LENGTH:
                 flash(f"Username must be at most {MAX_USERNAME_LENGTH} characters long.")
                 return redirect(url_for('index'))
@@ -32,12 +62,20 @@ def index():
 def select():
     if 'username' not in session:
         return redirect(url_for('index'))
+    # Double-check user still has quantkey in case it was removed
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
+        return redirect(url_for('index'))
     return render_template('select.html', username=session['username'])
 
 @app.route('/set_target', methods=['POST'])
 def set_target():
     if 'username' not in session:
         return redirect(url_for('index'))
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
+        return redirect(url_for('index'))
+
     target = request.form.get('target')
     if not target:
         flash("You must select a chat partner.")
@@ -60,6 +98,10 @@ def set_target():
 def waiting():
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
+        return redirect(url_for('index'))
+
     return render_template('waiting.html', 
                            username=session['username'],
                            target=session['target'])
@@ -67,6 +109,9 @@ def waiting():
 @app.route('/cancel_request', methods=['POST'])
 def cancel_request():
     if 'username' not in session or 'target' not in session:
+        return redirect(url_for('index'))
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
         return redirect(url_for('index'))
 
     target = session['target']
@@ -89,6 +134,9 @@ def cancel_request():
 def accept_request():
     if 'username' not in session:
         return redirect(url_for('index'))
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
+        return redirect(url_for('index'))
 
     requester = request.form.get('requester')
     if not requester:
@@ -97,13 +145,10 @@ def accept_request():
 
     session['target'] = requester
 
-    # -- NEW: Mark them in ongoing_chats so the server knows they're in a chat
     b_username = session['username']
     ongoing_chats[b_username] = requester
     ongoing_chats[requester] = b_username
-    # For example, ongoing_chats['Alice']='Bob' and ongoing_chats['Bob']='Alice'
 
-    # Notify A that B accepted
     requester_sid = None
     for sid, user in active_users.items():
         if user == requester:
@@ -117,6 +162,9 @@ def accept_request():
 @app.route('/decline_request', methods=['POST'])
 def decline_request():
     if 'username' not in session:
+        return redirect(url_for('index'))
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
         return redirect(url_for('index'))
 
     requester = request.form.get('requester')
@@ -138,6 +186,11 @@ def decline_request():
 def chat():
     if 'username' not in session or 'target' not in session:
         return redirect(url_for('index'))
+    # Check user still has quantkey
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
+        return redirect(url_for('index'))
+
     return render_template('chat.html', 
                            username=session['username'], 
                            target=session['target'])
@@ -148,17 +201,21 @@ def update_active_users():
 
 @socketio.on('connect')
 def handle_connect():
+    """
+    On Socket.IO connect, ensure the session's username has a quantkey.
+    If not, refuse connection (disconnect).
+    """
     username = session.get('username')
-    if username:
-        active_users[request.sid] = username
-        update_active_users()
+    if not username or (username not in quant_keys):
+        # You can either forcibly disconnect or just ignore
+        emit('error_message', {'error': 'No quantkey. Access denied.'})
+        return  # won't register in active_users
+    # Otherwise, register as active
+    active_users[request.sid] = username
+    update_active_users()
 
 @socketio.on('disconnect')
 def handle_disconnect():
-    """
-    If a user in a 1-on-1 chat disconnects,
-    notify their partner with 'chat_ended' so the partner is "kicked" out.
-    """
     sid = request.sid
     if sid in active_users:
         leaver = active_users[sid]
@@ -168,58 +225,46 @@ def handle_disconnect():
         # Check if 'leaver' is in an ongoing chat
         if leaver in ongoing_chats:
             partner = ongoing_chats[leaver]
-            # Remove both from the dict
             del ongoing_chats[leaver]
             if partner in ongoing_chats:
                 del ongoing_chats[partner]
 
-            # Find partner's sid
             partner_sid = None
             for s_id, user in active_users.items():
                 if user == partner:
                     partner_sid = s_id
                     break
 
-            # Notify partner that the chat ended
             if partner_sid:
                 socketio.emit('chat_ended', {'leaver': leaver}, to=partner_sid)
 
 @app.route('/leave_chat', methods=['POST'])
 def leave_chat():
-    """
-    User explicitly leaves the current chat,
-    so we kick the other user (send chat_ended).
-    Then redirect this user to /select.
-    """
     if 'username' not in session:
+        return redirect(url_for('index'))
+    if session['username'] not in quant_keys:
+        flash("Your quantkey is missing. Contact admin.")
         return redirect(url_for('index'))
 
     leaver = session['username']
     partner = session.get('target')
 
-    # Remove from any ongoing chat dictionary
     if partner:
-        # server code that finds and removes this pair from ongoing_chats...
-        # Example:
         if leaver in ongoing_chats:
             del ongoing_chats[leaver]
         if partner in ongoing_chats:
             del ongoing_chats[partner]
 
-        # Find partner's Socket.IO session ID
         partner_sid = None
         for sid, user in active_users.items():
             if user == partner:
                 partner_sid = sid
                 break
 
-        # Emit 'chat_ended' to partner
         if partner_sid:
             socketio.emit('chat_ended', {'leaver': leaver}, to=partner_sid)
 
-    # Clear your target
     session.pop('target', None)
-
     return redirect(url_for('select'))
 
 @socketio.on('private_message')
@@ -241,7 +286,6 @@ def handle_private_message(data):
             'message': message,
             'timestamp': timestamp
         }, to=target_sid)
-        # Echo to sender
         emit('private_message', {
             'username': sender_username,
             'message': message,
