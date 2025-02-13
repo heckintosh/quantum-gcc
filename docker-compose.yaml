@@ -1,59 +1,80 @@
+version: "2.4"
+
 services:
+  # This service sets the host's IPv4 forwarding
+  sysctl-setter:
+    image: busybox
+    container_name: sysctl-setter
+    command: sh -c "sysctl -w net.ipv4.ip_forward=0 && tail -f /dev/null"
+    privileged: true
+    network_mode: host
+
   bb84:
     build: ./bb84
     container_name: bb84
     command: ["sleep", "infinity"]
+    mac_address: "20:20:20:20:20:20"
     networks:
       network:
         ipv4_address: 10.0.0.2
-        mac_address: "20:20:20:20:20:20"
-      
     volumes:
       - ./bb84:/work
+    depends_on:
+      - sysctl-setter
+
   chat:
     build: ./chat
     container_name: chat
     command: ["sleep", "infinity"]
+    mac_address: "30:30:30:30:30:30"
     networks:
       network:
         ipv4_address: 10.0.0.3
-        mac_address: "30:30:30:30:30:30"
     volumes:
       - ./chat:/work
     ports:
       - "127.0.0.1:12345:12345"
-      
+    depends_on:
+      - sysctl-setter
+
   alice:
     build: ./client
     container_name: alice
     command: ["sleep", "infinity"]
+    mac_address: "40:40:40:40:40:40"
     networks:
       network:
         ipv4_address: 10.0.0.4
-        mac_address: "40:40:40:40:40:40"
     volumes:
       - ./client:/work
+    depends_on:
+      - sysctl-setter
+
   bob:
     build: ./client
     container_name: bob
     command: ["sleep", "infinity"]
+    mac_address: "50:50:50:50:50:50"
     networks:
       network:
         ipv4_address: 10.0.0.5
-        mac_address: "50:50:50:50:50:50"
     volumes:
       - ./client:/work
+    depends_on:
+      - sysctl-setter
+
   eve:
     build: ./attacker
     container_name: eve
     command: ["sleep", "infinity"]
+    mac_address: "60:60:60:60:60:60"
     networks:
       network:
         ipv4_address: 10.0.0.6
-        mac_address: "60:60:60:60:60:60"
     volumes:
       - ./attacker:/work
-    privileged: true
+    depends_on:
+      - sysctl-setter
 
 networks:
   network:
