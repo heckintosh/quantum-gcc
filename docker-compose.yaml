@@ -1,0 +1,41 @@
+services:
+  bob:
+    build: .
+    container_name: alice
+    command: ["sleep", "infinity"]
+    networks:
+      network:
+        ipv4_address: 10.0.0.2
+        mac_address: "20:20:20:20:20:20"
+    volumes:
+      - ./server.py:/server.py
+
+  alice:
+    build: .
+    container_name: bob
+    command: ["sleep", "infinity"]
+    networks:
+      network:
+        ipv4_address: 10.0.0.3
+        mac_address: "30:30:30:30:30:30"
+    volumes:
+      - ./client.py:/client.py
+
+  eve:
+    build: .
+    container_name: eve
+    command: ["sleep", "infinity"]
+    networks:
+      network:
+        ipv4_address: 10.0.0.4
+        mac_address: "40:40:40:40:40:40"
+    volumes:
+      - ./exploit.py:/exploit.py
+  
+networks:
+  network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.0.0/24
+          gateway: 10.0.0.1
