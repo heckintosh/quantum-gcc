@@ -1,0 +1,58 @@
+<!-- waiting.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Waiting for Acceptance</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+<div class="container mt-5">
+  <h2>Waiting for {{ target }} to accept your chat request...</h2>
+  <p>You can cancel at any time.</p>
+  <form action="{{ url_for('cancel_request') }}" method="POST">
+    <button type="submit" class="btn btn-danger">Cancel Request</button>
+  </form>
+</div>
+
+<!-- Socket.IO -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+  const socket = io();
+  const username = "{{ username }}";
+  const target = "{{ target }}";
+
+  // If B accepts:
+  socket.on('chat_accepted', function(data) {
+    // data = { accepter: 'B' }
+    if (data.accepter === target) {
+      // B accepted, so we can redirect to /chat
+      // alert("Your chat request was accepted by " + target + "!");
+      window.location.href = "/chat";  // goes to chat with target
+    }
+  });
+
+  // If B declines:
+  socket.on('chat_declined', function(data) {
+    // data = { decliner: 'B' }
+    if (data.decliner === target) {
+      alert("Your chat request was declined by " + target + ".");
+      window.location.href = "/select"; // back to select
+    }
+  });
+
+  // If B logs out or we get any other updates, you could handle them here
+  // Or if B sees a "request_canceled" from A's side, etc.
+
+  // If B cancels from their side (not typical in this flow), but let's handle anyway:
+  socket.on('request_canceled', function(data) {
+    // data = { canceler: 'someUser' }
+    // If the person who canceled is 'target', then there's no point waiting
+    if (data.canceler === target) {
+      alert("The user " + target + " canceled the request.");
+      window.location.href = "/select";
+    }
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Private Chat</title>
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <!-- Chat CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='chat.css') }}">
+</head>
+<body>
+<main class="content">
+  <div class="container p-0">
+    <div class="py-2 px-4 border-bottom">
+      <h4>Chatting privately with {{ target }}</h4>
+      <form action="{{ url_for('leave_chat') }}" method="POST" style="display:inline;">
+        <button type="submit" class="btn btn-sm btn-secondary">Change Chat Partner</button>
+      </form>
+    </div>
+    <h1 class="h3 mb-3">Messages</h1>
+    <div class="card">
+      <div class="row g-0">
+        <!-- Sidebar: Active Users List -->
+        <div class="col-12 col-lg-5 col-xl-3 border-right">
+          <div class="p-4">
+            <h4>Active Users</h4>
+            <ul id="activeUserList" class="list-unstyled"></ul>
+            <p class="text-muted mb-0">
+              Private chats only.
+            </p>
+          </div>
+          <hr class="d-block d-lg-none mt-1 mb-0">
+        </div>
+        <!-- Main Chat Area -->
+        <div class="col-12 col-lg-7 col-xl-9">
+          <div class="py-2 px-4 border-bottom d-none d-lg-block">
+            <div class="d-flex align-items-center py-1">
+              <div class="position-relative">
+                <img 
+                  src="https://bootdey.com/img/Content/avatar/avatar1.png" 
+                  class="rounded-circle mr-1" 
+                  alt="Avatar" 
+                  width="40" 
+                  height="40"
+                >
+              </div>
+              <div class="flex-grow-1 pl-3">
+                <strong>You are:</strong> {{ username }}
+              </div>
+            </div>
+          </div>
+          <div class="position-relative">
+            <div class="chat-messages p-4" id="chatMessages"></div>
+          </div>
+          <div class="flex-grow-0 py-3 px-4 border-top">
+            <div class="input-group">
+              <input 
+                type="text" 
+                class="form-control" 
+                id="messageInput" 
+                placeholder="Type your message..."
+              >
+              <button class="btn btn-primary" id="sendButton">Send</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<!-- Socket.IO JavaScript (CDN) -->
+<script src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script>
+<script>
+  const socket = io();
+  const username = "{{ username }}";
+  const target = "{{ target }}"; // target partner (non-empty)
+  const chatMessages = document.getElementById('chatMessages');
+  const messageInput = document.getElementById('messageInput');
+  const sendButton = document.getElementById('sendButton');
+  const activeUserList = document.getElementById('activeUserList');
+
+  // Sending private messages.
+  sendButton.onclick = function() {
+    const msg = messageInput.value.trim();
+    if (msg) {
+      socket.emit('private_message', { target: target, message: msg });
+      messageInput.value = '';
+    }
+  };
+
+  messageInput.addEventListener('keyup', function(event) {
+    if (event.key === 'Enter') {
+      sendButton.click();
+    }
+  });
+
+  // Listen for incoming private messages.
+  socket.on('private_message', function(data) {
+    const item = document.createElement('div');
+    const isMe = (data.username === username);
+    item.innerHTML = `
+      <div style="background-color: #ffe; padding: 5px; border-radius: 5px; margin: 5px 0;">
+        <strong>${isMe ? 'You (private)' : data.username + ' (private)'}:</strong> ${data.message}
+        <span style="font-size: small; color: gray;">${data.timestamp}</span>
+      </div>
+    `;
+    chatMessages.appendChild(item);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  });
+
+  // Listen for active user list updates.
+  socket.on('active_users', function(users) {
+    activeUserList.innerHTML = '';
+    users.forEach(function(user) {
+      if (user === username) return;
+      const li = document.createElement('li');
+      li.textContent = user;
+      li.dataset.username = user;
+      li.className = 'list-group-item';
+      li.style.cursor = 'pointer';
+      li.style.padding = '5px 0';
+      li.addEventListener('click', function() {
+        alert('To change your chat partner, please click "Change Chat Partner" at the top.');
+      });
+      activeUserList.appendChild(li);
+    });
+  });
+
+  // When a chat request is received, add a tick (✓) next to the requesting user's name.
+  socket.on('chat_request', function(data) {
+    const liElements = activeUserList.getElementsByTagName('li');
+    for (let li of liElements) {
+         if (li.dataset.username === data.from) {
+             if (!li.querySelector('.tick-icon')) {
+                 const tick = document.createElement('span');
+                 tick.className = 'tick-icon ml-2';
+                 tick.textContent = '✓';
+                 li.appendChild(tick);
+             }
+         }
+    }
+  });
+
+  socket.on('chat_ended', function(data) {
+    // data = { leaver: "Alice" }
+    alert(`${data.leaver} has left the chat. You will be returned to the selection page.`);
+    // Redirect or reload
+    window.location.href = "/select";
+  });
+
+  socket.on('error_message', function(data) {
+    alert(data.error);
+  });
+</script>
+</body>
+</html>
